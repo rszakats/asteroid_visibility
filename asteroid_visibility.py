@@ -16,11 +16,11 @@ import getpass
 import os
 import warnings
 from bokeh.plotting import Figure, figure
-from bokeh.models import ColumnDataSource, WheelZoomTool, DatePicker, TextInput, ResetTool, SaveTool, PanTool, Select, AutocompleteInput, MultiLine
+from bokeh.models import ColumnDataSource, WheelZoomTool, DatePicker, TextInput, ResetTool, SaveTool, PanTool, Select, AutocompleteInput, MultiLine, Select
 from bokeh.io import curdoc
 from bokeh.layouts import column, row
 from bokeh.palettes import d3, Viridis256
-from bokeh.models import LinearColorMapper, HoverTool
+from bokeh.models import LinearColorMapper, HoverTool, Span
 from bokeh.models import ColorBar
 from timezonefinder import TimezoneFinder
 import pytz
@@ -137,20 +137,48 @@ def callback(attr, old, new):
     calc_visibility(sname.value, date.value, observing_location, obsdata['code'][0])
     p.title.text = f"Visibility plot for {orig} at {date.value} from {autoc.value}"
 
-def create_renderers(colormap, name):
-    xs = [source3.data['xs']]
-    ys = [source3.data['ys']]
-    l = source3.data['az']
+def search_callback(attr, old, new):
+    # get the search term from the input widget
+    term = new.lower()
+    print(f"term: {term}")
 
-    color_mapper = LinearColorMapper(palette=colormap, 
-        low=min(l), high=max(l))
+    # filter the data based on the search term
+    filtered_data = {'ssos': []}
+    for i in range(len(data['ssos'])):
+        row = {'ssos': data['ssos'][i]}
 
-    glyph = MultiLine(xs="xs", ys="ys", 
-                      line_color={'field': 'az', 'transform': color_mapper}, 
-                      line_width=2, name=name)
+        # loop over each value in the row
+        for value in row.values():
+            value_str = str(value).lower()
 
-    color_bar = ColorBar(color_mapper=color_mapper, title=name)
-    return glyph, color_bar
+            # check if the value contains the search term
+            if term in value_str:
+                filtered_data['ssos'].append(row['ssos'])
+                print(f"Match! {term} {value_str}")
+                break
+
+    # update the data source with the filtered data
+    # source.data = filtered_data
+    # print(f"source.data:\n{source.data}")
+    # print(f"search.value: {search.value}")
+    source0.data = {'ssos': filtered_data['ssos']}
+    sname.options = filtered_data['ssos']
+    # sname.value = filtered_data['ssos'][0]
+
+# def create_renderers(colormap, name):
+#     xs = [source3.data['xs']]
+#     ys = [source3.data['ys']]
+#     l = source3.data['az']
+
+#     color_mapper = LinearColorMapper(palette=colormap, 
+#         low=min(l), high=max(l))
+
+#     glyph = MultiLine(xs="xs", ys="ys", 
+#                       line_color={'field': 'az', 'transform': color_mapper}, 
+#                       line_width=2, name=name)
+
+#     color_bar = ColorBar(color_mapper=color_mapper, title=name)
+#     return glyph, color_bar
 
 
 def read_obsdata():
@@ -168,7 +196,9 @@ def conv(s):
 astdat_file = download_asteroid_data()
 
 astdat = np.loadtxt(astdat_file, delimiter=",", dtype=str, usecols=0, converters={0: conv}).tolist()
-print(f"astdat: {astdat[0:10]}")
+# print(f"astdat: {astdat[0:10]}")
+data = {'ssos': astdat}
+source = ColumnDataSource(data)
 
 user = getpass.getuser()
 if os.path.exists("/tmp/"+str(user)) is False:
@@ -179,26 +209,29 @@ hover = HoverTool(line_policy='interp',
                   tooltips=[("object", "@labels"), ("UTC", "@time"), ("delta Time from midnight", "@xs"), ("altitude", "@ys"), ("azimuth", "@az")],
                   point_policy='snap_to_data')
 
-p = figure(height=800, width=1000, y_range=(0, 90) , x_range=(-10, 10))#, tools=[hover]) #  , x_range=(-12, 12)
+p = figure(height=1000, width=1200, y_range=(0, 90) , x_range=(-10, 10))#, tools=[hover]) #  , x_range=(-12, 12)
 
 observatories = read_obsdata()
 
-date = DatePicker(title='Choose date', value="2023-05-05")
-name = TextInput(title='Write target name')
-sname = AutocompleteInput(title='Search Target:', completions=astdat, case_sensitive=False)
-autoc = AutocompleteInput(title='Search Observatory:', completions=observatories['name'].tolist(), case_sensitive=False)
-date.on_change('value', callback)
-name.on_change('value', callback)
-sname.on_change('value', callback)
-autoc.on_change('value', callback)
-
+source0 = ColumnDataSource(data={'ssos':['1']})
 source1 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': []})
 source2 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': []})
 source3 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': ['1'], 'color': [], 'az': [1.], 'time': [datetime(2023, 5, 5), datetime(2023, 5, 6)]})
 source4 = ColumnDataSource(data={'center': [0], 'width': [0]})
 source5 = ColumnDataSource(data={'center': [0], 'width': [0]})
 
-top_row = row(date, sname, autoc)
+date = DatePicker(title='Choose date', value="2023-05-05")
+name = TextInput(title='Write target name')
+# sname = AutocompleteInput(title='Search Target:', completions=astdat, case_sensitive=False, placeholder="Search for an asteroid.")
+sname = Select(title='Choose a target:', options=source0.data['ssos'], value=f"{source0.data['ssos'][0]}")
+autoc = AutocompleteInput(title='Search Observatory:', completions=observatories['name'].tolist(), case_sensitive=False)
+
+date.on_change('value', callback)
+name.on_change('value', search_callback)
+sname.on_change('value', callback)
+autoc.on_change('value', callback)
+
+top_row = row(date, name, sname, autoc)
 middle_row = row(p)
 
 p.vbar(source=source5, x='center' ,width='width', bottom=0,top=90, color=d3['Category20c'][20][-1], fill_alpha=0.8, line_color=None)
@@ -208,7 +241,8 @@ color_mapper = LinearColorMapper(palette=Viridis256, low=0, high=360)
 p.line(x='xs', y='ys', source=source1, legend_label="Sun", color="orange", line_width=1)
 p.line(x='xs', y='ys', source=source2, legend_label="Moon", color=d3['Category20c'][4][1], line_width=2, line_dash='dashed')
 p.circle(x='xs', y='ys', source=source3, legend_field="labels", color={'field': 'az', 'transform': color_mapper})
-
+hline = Span(location=20, dimension='width', line_color='red', line_width=2, line_dash='dashed', line_alpha=0.5)
+p.renderers.extend([hline])
 p.add_tools(HoverTool(line_policy='interp',
                   tooltips=[("object", "@labels"), ("UTC", "@time"), ("delta Time from midnight", "@xs"), ("altitude", "@ys"), ("azimuth", "@az")],
                   point_policy='snap_to_data'))
