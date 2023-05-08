@@ -1,33 +1,59 @@
-#!/usr/bin/env python3.8
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+""" 
+A simple script to plot the visibility of an asteroid
+from a selected observatory in a given time. 
+It is based on this astropy tutorial:
+https://docs.astropy.org/en/stable/generated/examples/coordinates/plot_obs-planning.html
 
-import numpy as np
-import astropy.units as u
-from astropy.time import Time
-from astropy.coordinates import SkyCoord, EarthLocation, AltAz
-from astroquery.jplhorizons import Horizons
-from astropy.coordinates import get_sun
-from astropy.coordinates import get_moon
-from astropy.table import Table
+The get_indexfile function is from this project:
+https://github.com/rszakats/astname
+
+Usage: 
+bokeh serve --show asteroid_visibility.py
+"""
 import getpass
 import os
+import platform
 import warnings
-from bokeh.plotting import Figure, figure
-from bokeh.models import ColumnDataSource, DatePicker, TextInput, Select, AutocompleteInput, Select
+from datetime import datetime
+
+import astropy.units as u
+import numpy as np
+import pytz
+from astropy.coordinates import (AltAz, EarthLocation, SkyCoord, get_moon,
+                                 get_sun)
+from astropy.table import Table
+from astropy.time import Time
+from astroquery.jplhorizons import Horizons
 from bokeh.io import curdoc
 from bokeh.layouts import column, row
-from bokeh.palettes import d3, Viridis256
-from bokeh.models import LinearColorMapper, HoverTool, Span
-from bokeh.models import ColorBar
-from timezonefinder import TimezoneFinder
-import pytz
+from bokeh.models import (AutocompleteInput, ColorBar, ColumnDataSource,
+                          DatePicker, HoverTool, LinearColorMapper, Select,
+                          Span, TextInput)
+from bokeh.palettes import Viridis256, d3
+from bokeh.plotting import Figure, figure
 from pytz import timezone
-from datetime import datetime
+from timezonefinder import TimezoneFinder
+
 from astname import get_indexfile
-import platform
 
 warnings.filterwarnings("ignore")
 
 def download_asteroid_data():
+    """
+    Downloads the NASA JPL/Horizons index file, DASTCOM.IDX and saves it to
+    the cache folder.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    inputfile: str
+        The name of the input file.
+    """
     if platform.system() == 'Linux':
         cachedir = '/home/'+str(getpass.getuser())+'/.cache/'
     elif platform.system() == 'Windows':
@@ -45,9 +71,32 @@ def download_asteroid_data():
 
 #-----------------------------------------------------------------------------------------------------------
 def calc_visibility(name, otime, observing_location, observatoryid):
-    # fmt = '%Y-%m-%d %H:%M:%S'
+    """
+    Calculates the object's azimuth and altitude from the given
+    location at the specified time. Updates the sources for the 
+    Bokeh plots
+
+    Parameters
+    ----------
+    name: str
+        Name(number) of the target. 
+
+    otime: str
+        Observing time. Format: YYYY-MM-DD HH:mm:ss
+    
+    observing_location: EarthLocation object
+        Location of the observatory.
+    
+    observatoryid: str
+        Observatory ID of the observing_location. 
+        See the available IDs here:
+        https://www.minorplanetcenter.net/iau/lists/ObsCodesF.html
+    
+    Returns
+    -------
+    None
+    """
     otime = str(otime).split()[0]
-    # print(f"otime: {otime}")
     utc = pytz.utc
     loc = TimezoneFinder()
     timez = loc.timezone_at(lng=observing_location.lon.value, lat=observing_location.lat.value)
@@ -70,7 +119,6 @@ def calc_visibility(name, otime, observing_location, observatoryid):
     center = center.transform_to(AltAz(obstime=otime,
                                     location=observing_location))
 
-    # print(f"utcoffset (h): {utcoffset}")
     midnight = otime - 2*utcoffset*u.hour
     delta_midnight = np.linspace(-10, 10, 1000)*u.hour
     times = midnight + delta_midnight + utcoffset*u.hour
@@ -114,12 +162,32 @@ def calc_visibility(name, otime, observing_location, observatoryid):
     center5 = interval5[int(len(interval5)/2)]
     source4.data = {'center': [center4], 'width': [max(source1.data['xs'][sunaltazs.alt < -0*u.deg])-min(source1.data['xs'][sunaltazs.alt < -0*u.deg])]}
     source5.data = {'center': [center5], 'width': [max(source1.data['xs'][sunaltazs.alt < -12*u.deg])-min(source1.data['xs'][sunaltazs.alt < -12*u.deg])]}
-    # print(f"source3.data:\n{source3.data}")
 
 #-----------------------------------------------------------------------------------------------------------
 def callback(attr, old, new):
+    """
+    Callback function for the input field widgets.
+    If nothing is set, uses default values for input.
+    Calls the calc_visibility() function to update
+    the plot sources.
+
+    Parameters
+    ----------
+    attr: str
+        String passed to the callback function.
+
+    old: str
+        Old value of the input field.
+    
+    new: str
+        New value of the input field.
+    
+    Returns
+    -------
+    None
+    """
     if sname.value == "":
-        sname.value = '1'
+        sname.value = '1 Ceres'
     if date.value == "":
         date.value = "2023-05-05"
     if autoc.value == "":
@@ -133,6 +201,30 @@ def callback(attr, old, new):
 
 #-----------------------------------------------------------------------------------------------------------
 def search_callback2(attr, old, new):
+    """
+    Callback function for the object search field widget.
+    It uses the data from the DASTCOM.IDX file to find
+    the asteroid. It extracts all the matches in case 
+    of a string search.
+
+    Calls the update_info() function to update
+    the plot sources.
+
+    Parameters
+    ----------
+    attr: str
+        String passed to the callback function.
+
+    old: str
+        Old value of the input field.
+    
+    new: str
+        New value of the input field.
+    
+    Returns
+    -------
+    None
+    """
     try:
         targ = int(new)
         if isinstance(targ, int):
@@ -155,12 +247,24 @@ def search_callback2(attr, old, new):
 
 #-----------------------------------------------------------------------------------------------------------
 def update_info():
+    """
+    Function to update the source data for the plot
+    with the selected asteroid's data.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
     data = fulldata[np.where(fulldata['astnum'] == f'{sname.value}')]
     info = f"Number: {data['astnum'][0]}\nName/ID: {data['astid'][0]}\n"\
            f"NAIFID: {data['naifid'][0]}\nOther ID(s): {str(data['altid'][0]).replace(',', ';')}"
     infos = []
     labels = []
-    for i in range(len(source3.data['xs'])):
+    for _ in range(len(source3.data['xs'])):
         labels.append(f"{data['astnum'][0]} {data['astid'][0]}")
         infos.append(info)
     source3.data['info'] = infos
@@ -170,12 +274,65 @@ def update_info():
     
 #-----------------------------------------------------------------------------------------------------------
 def read_obsdata():
+    """
+    Function to read the observatory data file.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    t: astropy.table object
+        The observatory data in an astropy Table.
+        <Table length=2408>
+        name   dtype 
+        ------ -------
+        name   str48    # observatory name
+        code    str3    # Observatory Code assigned by the Minor Planet Center
+        long float64    # Longitude of the observatory (deg)
+        gclat float64   # Geocentric latitude of the observatory (deg)
+        gdlat float64   # Geodetic latitude of the observatory WGS84 (deg)
+        height float64  # Altitude of the observatory (m)
+        map   str65     # link to the location on openstreet map
+
+    """
     # https://dc.zah.uni-heidelberg.de/obscode/q/query/form
     t = Table.read('observatories.csv', format='ascii.csv')
     return t
 
 #-----------------------------------------------------------------------------------------------------------
 def get_obsdata(observatories, observatory):
+    """
+    Gets the observatory data for the selected observatory.
+
+
+    Parameters
+    ----------
+    observatories: astropy.table object
+        The return value of the read_obsdata() function.
+
+    observatory: str
+        Value of the autocomplete input widget, i.e.
+        the name of the selected osbervatory.
+
+
+    Returns
+    -------
+    obs: astropy.table object
+        The observatory data in an astropy Table.
+        <Table length=1>
+        name   dtype 
+        ------ -------
+        name   str48    # observatory name
+        code    str3    # Observatory Code assigned by the Minor Planet Center
+        long float64    # Longitude of the observatory (deg)
+        gclat float64   # Geocentric latitude of the observatory (deg)
+        gdlat float64   # Geodetic latitude of the observatory WGS84 (deg)
+        height float64  # Altitude of the observatory (m)
+        map   str65     # link to the location on openstreet map
+    """
+
     obs = observatories[observatories['name'] == observatory]
     return obs
 
@@ -185,6 +342,28 @@ def get_obsdata(observatories, observatory):
 
 #-----------------------------------------------------------------------------------------------------------
 def read_astdata(infile):
+    """
+    Function to read the DASTCOM.IDX file to
+    an astropy.table object.
+
+    Parameters
+    ----------
+    infile: str
+        Full path to the DASTCOM.IDX file.
+
+    Returns
+    t: astropy.table
+        The astropy.table object containing the 
+        whole data from the input file.
+        <Table length=1286232>
+        name  dtype
+        ------ -----
+        astnum  str8  # Asteroid IAU number, see: https://sci.esa.int/web/home/-/30244-asteroid-numbers-and-names
+        astid str28   # Asteroid name/designation
+        naifid  str8  # NAIF Integer ID code, see: https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/naif_ids.html
+        altid str70   # Other designations
+
+    """
     astnums = []
     astids = []
     naifids = []
