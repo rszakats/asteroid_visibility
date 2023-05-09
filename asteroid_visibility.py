@@ -154,7 +154,8 @@ def calc_visibility(name, otime, observing_location, observatoryid):
                    'labels': label3,
                    'color': color3,
                    'az': center2.az.value.tolist(),
-                   'time': times.value.tolist()}
+                   'time': times.value.tolist(),
+                   'moonsep': sep.value.tolist()}
 
     interval4 = source1.data['xs'][sunaltazs.alt < -0*u.deg]
     center4 = interval4[int(len(interval4)/2)]
@@ -416,7 +417,7 @@ source2 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': []})
 source3 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': ['1'],
                                  'color': [], 'az': [1.],
                                  'time': [datetime.now(), datetime.now()],
-                                 'info': []})
+                                 'info': [], 'moonsep': []})
 source4 = ColumnDataSource(data={'center': [0], 'width': [0]})
 source5 = ColumnDataSource(data={'center': [0], 'width': [0]})
 
@@ -449,8 +450,8 @@ bar = ColorBar(color_mapper=color_mapper, location=(0,0), title="Azimuth (deg)")
 p.add_layout(bar, "right")
 
 p.add_tools(HoverTool(renderers=[sun, moon, targ],line_policy='interp',
-                  tooltips=[("object", "@labels"), ("UTC", "@time"), ("delta Time from midnight", "@xs"),
-                            ("altitude", "@ys"), ("azimuth", "@az"),
+                  tooltips=[("object", "@labels"), ("UTC", "@time"), ("delta Time from midnight", "@xs h"),
+                            ("altitude", "@ys°"), ("azimuth", "@az°"), ("moon separation", "@moonsep°"),
                             ("Info:" ,"@info")],
                   point_policy='snap_to_data'))
 
