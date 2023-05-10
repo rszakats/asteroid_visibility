@@ -140,7 +140,6 @@ def calc_visibility(name, otime, observing_location, observatoryid):
         label2.append("Moon")
         label3.append(name)
         color3.append("green")
-    
     source1.data = {'xs':delta_midnight.value,
                    'ys': sunaltazs.alt.value,
                    'labels': label1,
@@ -190,7 +189,7 @@ def callback(attr, old, new):
     if sname.value == "":
         sname.value = '1 Ceres'
     if date.value == "":
-        date.value = "2023-05-05"
+        date.value = f"{datetime.now()}"
     if autoc.value == "":
         autoc.value = "Piszkesteto Stn. (Konkoly)"
     sname.value = str(sname.value).split()[0]
@@ -268,8 +267,16 @@ def update_info():
     for _ in range(len(source3.data['xs'])):
         labels.append(f"{data['astnum'][0]} {data['astid'][0]}")
         infos.append(info)
-    source3.data['info'] = infos
-    source3.data['labels'] = labels
+    try:
+        if infos != source3.data['info']:
+            source3.data['info'] = infos
+    except:
+        source3.data['info'] = infos
+    try:
+        if labels != source3.data['labels']:
+            source3.data['labels'] = labels
+    except:
+        source3.data['labels'] = labels
     p.title.text = f"Visibility plot for {data['astnum'][0]} {data['astid'][0]} at {date.value} from {autoc.value}"
 
     
@@ -417,7 +424,7 @@ source2 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': []})
 source3 = ColumnDataSource(data={'xs':[], 'ys': [], 'labels': ['1'],
                                  'color': [], 'az': [1.],
                                  'time': [datetime.now(), datetime.now()],
-                                 'info': [], 'moonsep': []})
+                                 'info': [""], 'moonsep': []})
 source4 = ColumnDataSource(data={'center': [0], 'width': [0]})
 source5 = ColumnDataSource(data={'center': [0], 'width': [0]})
 
@@ -435,9 +442,9 @@ autoc.on_change('value', callback)
 
 p = figure(height=1000, width=1200, y_range=(0, 90) , x_range=(-10, 10))#, tools=[hover]) #  , x_range=(-12, 12)
 p.rect(x='center', y=45, width='width', height=90, source=source5,
-       fill_alpha=0.8, line_color=d3['Category20c'][20][-1], fill_color=d3['Category20c'][20][-1])
+       fill_alpha=0.9, line_color=d3['Category20c'][20][-1], fill_color=d3['Category20c'][20][-1])
 p.rect(x='center', y=45, width='width', height=90, source=source4,
-       fill_alpha=0.4, line_color=d3['Category20c'][20][16], fill_color=d3['Category20c'][20][16])
+       fill_alpha=0.6, line_color=d3['Category20c'][20][16], fill_color=d3['Category20c'][20][16])
 
 color_mapper = LinearColorMapper(palette=Viridis256, low=0, high=360)
 sun = p.line(x='xs', y='ys', source=source1, legend_label="Sun", color="orange", line_width=1)
@@ -451,7 +458,7 @@ p.add_layout(bar, "right")
 
 p.add_tools(HoverTool(renderers=[sun, moon, targ],line_policy='interp',
                   tooltips=[("object", "@labels"), ("UTC", "@time"), ("delta Time from midnight", "@xs h"),
-                            ("altitude", "@ys°"), ("azimuth", "@az°"), ("moon separation", "@moonsep°"),
+                            ("altitude", "@ys°"), ("azimuth", "@az°"), ("moon separation°", "@moonsep°"),
                             ("Info:" ,"@info")],
                   point_policy='snap_to_data'))
 
