@@ -10,7 +10,17 @@ The get_indexfile function is from this project:
 https://github.com/rszakats/astname
 
 Usage: 
+First time: 
+virtualenv astvis
+source astvis/bin/activate
+pip install -r requirements.txt
 bokeh serve --show asteroid_visibility.py
+deactivate
+
+If virtual environment is already activated:
+source astvis/bin/activate
+bokeh serve --show asteroid_visibility.py
+deactivate
 """
 import getpass
 import os
